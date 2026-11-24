@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>2026 MBA 어워즈 투표</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,900&family=Noto+Sans+KR:wght@500;700;900&display=swap">
+<style>
+:root{--ink:#0B0607;--surface:#170B0D;--line:#3C1B1E;--line2:#5E2A2F;--fg:#F8EFEA;--dim:#C2A9A5;--dim2:#8A6E6A;--red:#E1141E;--red-hi:#FF4A4F;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--ink);color:var(--fg);font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif;word-break:keep-all;
+  background-image:radial-gradient(120% 60% at 50% -10%,rgba(225,20,30,.32),transparent 65%);
+  padding:max(20px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+.wrap{max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.brand{font-family:'Playfair Display',Georgia,serif;font-style:italic;font-weight:900;color:var(--red-hi);font-size:17px}
+h1{margin:0;font-size:30px;line-height:1.2;font-weight:900}
+.sub{color:var(--dim);font-size:15px;line-height:1.6;margin:0}
+.opts{display:flex;flex-direction:column;gap:12px}
+.opt{display:flex;align-items:center;gap:16px;width:100%;padding:18px 18px;border-radius:12px;border:2px solid var(--line2);background:var(--surface);color:var(--fg);font:inherit;text-align:left;cursor:pointer;min-height:76px}
+.opt:active{transform:scale(.98)}
+.opt b{font-family:'Playfair Display',Georgia,serif;font-style:italic;font-weight:900;font-size:40px;color:var(--red-hi);width:36px;text-align:center;line-height:1}
+.opt span{font-size:21px;font-weight:700;line-height:1.3}
+.opt:disabled{opacity:.5;cursor:default}
+.opt.mine{border-color:var(--red);background:#2A0D10}
+.done{border:1px solid var(--red);border-radius:12px;padding:22px 18px;text-align:center;background:rgba(225,20,30,.08)}
+.done .big{font-size:24px;font-weight:900;margin-bottom:6px}
+.wait{border:1px dashed var(--line2);border-radius:12px;padding:28px 18px;text-align:center;color:var(--dim);line-height:1.7}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-right:6px;animation:p 1.2s infinite}
+@keyframes p{50%{opacity:.25}}
+.err{color:#FFB3B3;font-size:14px;min-height:1.4em;text-align:center}
+.foot{color:var(--dim2);font-size:12px;text-align:center;line-height:1.6}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">Brand Management · Year-End Night</div>
+  <h1 id="title">2026 MBA 어워즈</h1>
+  <p class="sub" id="sub">앞 화면의 후보 사진을 보고 한 장을 골라 주세요.</p>
+
+  <div class="wait" id="wait"><span class="dot"></span>지금은 투표 시간이 아니에요.<br>앞 화면에서 투표가 시작되면 이 화면이 자동으로 바뀝니다.</div>
+  <div class="opts" id="opts" hidden></div>
+  <div class="done" id="done" hidden><div class="big">투표 완료!</div><div id="doneTxt"></div></div>
+  <div class="err" id="err" role="status"></div>
+  <div class="foot">경희대학교 경영대학원 브랜드매니지먼트 전공 · 2026 송년의 밤<br>투표는 익명이며 부문마다 한 번만 할 수 있어요.</div>
+</div>
+<script>
+var SB = 'https://zalcpnygiqypafunloyz.supabase.co';
+var KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphbGNwbnlnaXF5cGFmdW5sb3l6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU1MDYzNTYsImV4cCI6MjExMTA4MjM1Nn0.bMJMkeBtafOzH8W0uj7PRvUurmzVfsN8kXt1aHuhPaA';
+function $(s){ return document.querySelector(s); }
+function store(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v); }catch(e){ return null; } }
+var voter = store('ye-voter');
+if(!voter){ voter = (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36)+Math.random().toString(36).slice(2))).replace(/-/g,''); store('ye-voter', voter); }
+var poll = null, busy = false, lastKey = '';
+function api(path, opt){
+  opt = opt || {};
+  opt.headers = Object.assign({apikey:KEY, Authorization:'Bearer '+KEY, 'Content-Type':'application/json'}, opt.headers||{});
+  return fetch(SB+path, opt);
+}
+function render(){
+  var p = poll, open = p && p.open_award;
+  $('#wait').hidden = !!open;
+  $('#opts').hidden = true; $('#done').hidden = true;
+  if(!open){ $('#title').textContent='2026 MBA 어워즈'; $('#sub').textContent='앞 화면의 후보 사진을 보고 한 장을 골라 주세요.'; return; }
+  $('#title').textContent = p.title || '2026 MBA 어워즈';
+  var mine = store('ye-vote-'+open);
+  if(mine){
+    $('#done').hidden = false;
+    $('#doneTxt').textContent = '후보 '+mine+'에 투표했어요. 앞 화면에서 결과를 확인해 주세요!';
+    $('#sub').textContent = '이 부문은 투표를 마쳤어요.';
+    return;
+  }
+  $('#sub').textContent = '앞 화면의 후보 사진을 보고 한 장을 골라 주세요.';
+  var key = open+'|'+JSON.stringify(p.names||{});
+  var w = $('#opts'); w.hidden = false;
+  if(key === lastKey) return;
+  lastKey = key; w.innerHTML = '';
+  ['A','B','C'].forEach(function(c){
+    var n = (p.names||{})[c]; if(n === undefined) return;
+    var b = document.createElement('button'); b.className='opt'; b.type='button';
+    var l = document.createElement('b'); l.textContent=c;
+    var s = document.createElement('span'); s.textContent = n || ('후보 '+c);
+    b.appendChild(l); b.appendChild(s);
+    b.onclick = function(){ vote(open, c, b); };
+    w.appendChild(b);
+  });
+}
+function vote(award, choice, btn){
+  if(busy) return; busy = true; $('#err').textContent='';
+  Array.prototype.forEach.call(document.querySelectorAll('.opt'), function(x){ x.disabled=true; });
+  btn.classList.add('mine');
+  api('/rest/v1/votes', {method:'POST', headers:{Prefer:'return=minimal'}, body:JSON.stringify({award:award, choice:choice, voter:voter})})
+    .then(function(r){
+      if(r.ok || r.status===409){ store('ye-vote-'+award, choice); if(r.status===409) $('#err').textContent='이미 투표하셨어요.'; }
+      else if(r.status===401 || r.status===403){ $('#err').textContent='이 부문 투표가 방금 마감됐어요.'; }
+      else { $('#err').textContent='전송이 안 됐어요. 다시 눌러 주세요.'; }
+    })
+    .catch(function(){ $('#err').textContent='인터넷 연결을 확인하고 다시 눌러 주세요.'; })
+    .then(function(){ busy=false; lastKey=''; render(); });
+}
+function tick(){
+  api('/rest/v1/poll?id=eq.1&select=open_award,title,names')
+    .then(function(r){ return r.json(); })
+    .then(function(a){ poll = a && a[0] || null; if(!busy) render(); })
+    .catch(function(){})
+    .then(function(){ setTimeout(tick, 2000); });
+}
+tick();
+</script>
+</body>
+</html>
